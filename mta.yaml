@@ -1,0 +1,105 @@
+_schema-version: "3.1"
+ID: LocalCapm
+description: A simple CAP project.
+version: 1.0.0
+modules:
+- name: LocalCapm-srv
+  type: nodejs
+  path: gen/srv
+  requires:
+  - name: LocalCapm-db
+  provides:
+  - name: srv-api
+    properties:
+      srv-url: ${default-url}
+  parameters:
+    buildpack: nodejs_buildpack
+  build-parameters:
+    builder: npm
+- name: LocalCapm-db-deployer
+  type: hdb
+  path: gen/db
+  requires:
+  - name: LocalCapm-db
+  parameters:
+    buildpack: nodejs_buildpack
+- name: LocalCapm-app-content
+  type: com.sap.application.content
+  path: .
+  requires:
+  - name: LocalCapm-repo-host
+    parameters:
+      content-target: true
+  build-parameters:
+    build-result: resources
+    requires:
+    - artifacts:
+      - capcomempapp.zip
+      name: capcomempapp
+      target-path: resources/
+    - artifacts:
+      - comtestdemoui.zip
+      name: comtestdemoui
+      target-path: resources/
+- name: capcomempapp
+  type: html5
+  path: app/emp_app
+  build-parameters:
+    build-result: dist
+    builder: custom
+    commands:
+    - npm install
+    - npm run build:cf
+    supported-platforms: []
+- name: comtestdemoui
+  type: html5
+  path: app/demoui
+  build-parameters:
+    build-result: dist
+    builder: custom
+    commands:
+    - npm install
+    - npm run build:cf
+    supported-platforms: []
+resources:
+- name: LocalCapm-db
+  type: com.sap.xs.hdi-container
+  parameters:
+    service: hana
+    service-plan: hdi-shared
+- name: LocalCapm-repo-host
+  type: org.cloudfoundry.managed-service
+  parameters:
+    service: html5-apps-repo
+    service-name: LocalCapm-html5-srv
+    service-plan: app-host
+- name: LocalCapm-destination-service
+  type: org.cloudfoundry.managed-service
+  parameters:
+    config:
+      HTML5Runtime_enabled: false
+      init_data:
+        instance:
+          destinations:
+          - Authentication: NoAuthentication
+            HTML5.DynamicDestination: true
+            HTML5.ForwardAuthToken: true
+            Name: Employeeservice-srv-api
+            ProxyType: Internet
+            Type: HTTP
+            URL: ~{srv-api/srv-url}
+          existing_destinations_policy: update
+      version: 1.0.0
+    service: destination
+    service-name: LocalCapm-destination-service
+    service-plan: lite
+    requires:
+      - name:srv-api
+parameters:
+  deploy_mode: html5-repo
+  enable-parallel-deployments: true
+build-parameters:
+  before-all:
+  - builder: custom
+    commands:
+    - npx cds build --production
